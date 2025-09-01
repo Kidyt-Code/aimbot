@@ -8,39 +8,73 @@ local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 --// SETTINGS
-local RADIUS_PIXELS = 100
+local RADIUS_PIXELS = 150 -- increased from 100
 local FOV_COLOR = Color3.fromRGB(255, 0, 0)
 local aimbotEnabled = false
+local PREDICTION_TIME = 1 -- seconds ahead
 
 --// GUI
 local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
 gui.Name = "AimbotGUI"
 gui.ResetOnSpawn = false
 
--- Splash "Made by Vex" label
-local splashLabel = Instance.new("TextLabel")
-splashLabel.Size = UDim2.new(0, 400, 0, 100)
-splashLabel.Position = UDim2.new(0.5, -200, 0.5, -50)
-splashLabel.BackgroundTransparency = 1
-splashLabel.Font = Enum.Font.GothamBlack
-splashLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-splashLabel.TextScaled = true
-splashLabel.Text = "Made by Vex"
-splashLabel.TextStrokeTransparency = 0
-splashLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-splashLabel.Parent = gui
-splashLabel.TextTransparency = 1
+-- FUNCTION to create 3D text
+local function Create3DText(text, parent, position, size, mainColor, depthColor, depthOffset)
+	depthOffset = depthOffset or 4
+	local labels = {}
+	for i = 1, depthOffset do
+		local depthLabel = Instance.new("TextLabel")
+		depthLabel.Size = size
+		depthLabel.Position = position + UDim2.new(0, i, 0, i)
+		depthLabel.BackgroundTransparency = 1
+		depthLabel.Font = Enum.Font.GothamBlack
+		depthLabel.Text = text
+		depthLabel.TextColor3 = depthColor
+		depthLabel.TextScaled = true
+		depthLabel.TextStrokeTransparency = 0
+		depthLabel.Parent = parent
+		depthLabel.TextTransparency = 1
+		table.insert(labels, depthLabel)
+	end
+	local mainLabel = Instance.new("TextLabel")
+	mainLabel.Size = size
+	mainLabel.Position = position
+	mainLabel.BackgroundTransparency = 1
+	mainLabel.Font = Enum.Font.GothamBlack
+	mainLabel.Text = text
+	mainLabel.TextColor3 = mainColor
+	mainLabel.TextScaled = true
+	mainLabel.TextStrokeTransparency = 0
+	mainLabel.Parent = parent
+	mainLabel.TextTransparency = 1
+	table.insert(labels, mainLabel)
 
--- Fade in the splash
-TweenService:Create(splashLabel, TweenInfo.new(1.2), {TextTransparency = 0}):Play()
+	for _, lbl in pairs(labels) do
+		TweenService:Create(lbl, TweenInfo.new(1.5), {TextTransparency = 0}):Play()
+	end
+end
 
--- After fade-in, fade out and then create the main GUI
-delay(2, function()
-	TweenService:Create(splashLabel, TweenInfo.new(1.2), {TextTransparency = 1}):Play()
+-- Splash
+Create3DText(
+	"Made by Vex",
+	gui,
+	UDim2.new(0.5, -200, 0.5, -50),
+	UDim2.new(0, 400, 0, 100),
+	Color3.fromRGB(255, 255, 255),
+	Color3.fromRGB(0, 0, 0),
+	4
+)
+
+delay(3, function()
+	for _, obj in ipairs(gui:GetChildren()) do
+		if obj:IsA("TextLabel") then
+			TweenService:Create(obj, TweenInfo.new(1.2), {TextTransparency = 1}):Play()
+		end
+	end
+
 	wait(1.2)
-	splashLabel:Destroy()
 
-	--// MAIN GUI
+	-- MAIN GUI
 	local mainFrame = Instance.new("Frame")
 	mainFrame.Size = UDim2.new(0, 220, 0, 100)
 	mainFrame.Position = UDim2.new(0.5, -110, 0.5, -50)
@@ -58,7 +92,6 @@ delay(2, function()
 	uiStroke.Color = Color3.fromRGB(200, 200, 200)
 	uiStroke.Transparency = 1
 
-	-- Fade in GUI
 	TweenService:Create(mainFrame, TweenInfo.new(1), {BackgroundTransparency = 0.1}):Play()
 	TweenService:Create(uiStroke, TweenInfo.new(1), {Transparency = 0.5}):Play()
 
@@ -76,7 +109,6 @@ delay(2, function()
 	local toggleCorner = Instance.new("UICorner", toggleBtn)
 	toggleCorner.CornerRadius = UDim.new(0, 12)
 
-	-- Hover effect
 	toggleBtn.MouseEnter:Connect(function()
 		TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(90, 90, 100)}):Play()
 	end)
@@ -84,22 +116,21 @@ delay(2, function()
 		TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 70, 75)}):Play()
 	end)
 
-	--// FOV CIRCLE
+	-- FOV circle
 	local circle = Instance.new("Frame", gui)
 	circle.Size = UDim2.fromOffset(RADIUS_PIXELS*2, RADIUS_PIXELS*2)
 	circle.AnchorPoint = Vector2.new(0.5, 0.5)
 	circle.BackgroundTransparency = 1
 	circle.BorderSizePixel = 0
-	circle.Visible = false -- hidden by default
+	circle.Visible = false
 
 	local circleCorner = Instance.new("UICorner", circle)
 	circleCorner.CornerRadius = UDim.new(1, 0)
-
 	local circleStroke = Instance.new("UIStroke", circle)
 	circleStroke.Thickness = 2
 	circleStroke.Color = FOV_COLOR
 
-	--// FUNCTIONS
+	-- FUNCTIONS
 	local function isVisible(part)
 		if not part then return false end
 		local origin = Camera.CFrame.Position
@@ -122,7 +153,7 @@ delay(2, function()
 			end
 		end
 		for _, obj in ipairs(workspace:GetChildren()) do
-			if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj:FindFirstChild("HumanoidRootPart") then
+			if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj:FindFirstChild("Head") then
 				if not Players:GetPlayerFromCharacter(obj) then
 					table.insert(chars, obj)
 				end
@@ -134,14 +165,14 @@ delay(2, function()
 	local function getClosestTarget()
 		local closest, closestDist = nil, math.huge
 		for _, char in ipairs(getAllCharacters()) do
-			local hrp = char:FindFirstChild("HumanoidRootPart")
+			local head = char:FindFirstChild("Head")
 			local humanoid = char:FindFirstChildOfClass("Humanoid")
-			if hrp and humanoid and humanoid.Health > 0 then
-				local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+			if head and humanoid and humanoid.Health > 0 then
+				local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
 				if onScreen then
 					local dist = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-					if dist < RADIUS_PIXELS and dist < closestDist and isVisible(hrp) then
-						closest = hrp
+					if dist < RADIUS_PIXELS and dist < closestDist and isVisible(head) then
+						closest = head
 						closestDist = dist
 					end
 				end
@@ -150,7 +181,7 @@ delay(2, function()
 		return closest
 	end
 
-	--// TOGGLE
+	-- TOGGLE
 	local function updateToggle()
 		aimbotEnabled = not aimbotEnabled
 		circle.Visible = aimbotEnabled
@@ -158,7 +189,6 @@ delay(2, function()
 	end
 
 	toggleBtn.MouseButton1Click:Connect(updateToggle)
-
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.KeyCode == Enum.KeyCode.G then
@@ -166,14 +196,17 @@ delay(2, function()
 		end
 	end)
 
-	--// MAIN LOOP
+	-- MAIN LOOP
 	RunService.RenderStepped:Connect(function()
 		circle.Position = UDim2.fromOffset(Mouse.X, Mouse.Y)
 		if aimbotEnabled then
 			local target = getClosestTarget()
 			if target then
-				Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+				local velocity = target.AssemblyLinearVelocity or Vector3.new(0,0,0)
+				local predictedPos = target.Position + velocity * PREDICTION_TIME
+				Camera.CFrame = CFrame.new(Camera.CFrame.Position, predictedPos)
 			end
 		end
 	end)
 end)
+
